@@ -1,0 +1,23 @@
+{
+    "name": "1-net-rdp",
+    "version": "0.5.0",
+    "description": "1-NET Windows remote desktop client that can access remote machine through 1-NET gateways connecting two remote LANs.",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "remote",
+        "desktop",
+        "remote",
+        "control",
+        "security",
+        "internet"
+    ],
+    "author": "Shuqian Ying",
+    "license": "GPL",
+    "dependencies": {
+        "node-ipc": "^8.9.2",
+        "node-rdpjs": "git+https://github.com/webarchymeta/node-rdpjs"
+    }
+}
