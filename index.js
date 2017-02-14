@@ -1,3 +1,5 @@
+'use strict';
+
 const {
     BrowserWindow,
     app,
@@ -7,7 +9,14 @@ const {
 const
     crypto = require('crypto'),
     inter_proc_ipc = require('node-ipc'),
-    server = require(__dirname + '/server');
+    server = require(__dirname + '/server'),
+    mainDbApi = require(__dirname + '/libs/main-db-api'),
+    winStateUpdator = require(__dirname + '/libs/state-updator');
+
+const mainWindowId = 'main-window';
+
+let mainWindow = null;
+let mainDB, stateUpdator;
 
 const get_app_id = () => {
     let md5 = crypto.createHash('md5');
@@ -16,14 +25,18 @@ const get_app_id = () => {
 };
 
 app.on('window-all-closed', () => {
+    stateUpdator.flush().then(() => {
+        return mainDB.close().then(() => {
+            if (process.platform != 'darwin') {
+                app.quit();
+            }
+        });
+    });
     inter_proc_ipc.of.inter_app_services.emit('socks-client-status', {
         id: get_app_id(),
         pid: process.pid,
         started: false
     });
-    if (process.platform != 'darwin') {
-        app.quit();
-    }
 });
 
 const register_app = () => {
@@ -53,25 +66,28 @@ const register_app = () => {
     });
 };
 
-app.on('ready', () => {
-    register_app();
-    server.start(process.env.SOCKS5_ADDRESS ? {
-        socksHost: process.env.SOCKS5_ADDRESS,
-        socksPort: process.env.SOCKS5_PORT
-    } : undefined);
-    mainWindow = new BrowserWindow({
-        width: 1530,
-        height: 920,
-        autoHideMenuBar: true
-    });
+const createWindow = (initBounds) => {
+    const wopts = {
+        width: initBounds ? initBounds.width : 1530,
+        height: initBounds ? initBounds.height : 920,
+        autoHideMenuBar: true,
+    };
+    if (initBounds) {
+        wopts.x = initBounds.loc_x;
+        wopts.y = initBounds.loc_y;
+    }
+    mainWindow = new BrowserWindow(wopts);
+    console.log('window created ...');
     //mainWindow.openDevTools();
     mainWindow.loadURL('file://' + require('path').join(__dirname, 'client/html/index.html'));
+
     mainWindow.on('maximize', () => {
         mainWindow.webContents.send('maximize');
     });
     mainWindow.on('unmaximize', () => {
         mainWindow.webContents.send('unmaximize');
     });
+
     mainWindow.webContents.on('did-finish-load', () => {
         mainWindow.maximize();
         let copts = {
@@ -85,7 +101,47 @@ app.on('ready', () => {
         }
         mainWindow.webContents.send('runtime-context-update', copts);
     });
+
+    mainWindow.on('resize', () => {
+        stateUpdator.updateWindowState(mainWindowId, {
+            bounds: mainWindow.getBounds()
+        })
+    });
+    mainWindow.on('move', () => {
+        stateUpdator.updateWindowState(mainWindowId, {
+            bounds: mainWindow.getBounds()
+        })
+    });
+
+    mainWindow.on('enter-full-screen', () => {
+
+    });
+    mainWindow.on('leave-full-screen', () => {
+
+    });
+
     mainWindow.on('closed', () => {
         mainWindow = null
+    });
+};
+
+app.on('ready', () => {
+    register_app();
+    server.start(process.env.SOCKS5_ADDRESS ? {
+        socksHost: process.env.SOCKS5_ADDRESS,
+        socksPort: process.env.SOCKS5_PORT
+    } : undefined);
+    mainDB = new mainDbApi({
+        home: app.getPath('appData'),
+        path: app.getName() + '/databases'
+    });
+    mainDB.open().then(() => {
+        stateUpdator = new winStateUpdator(mainDB);
+        mainDB.find({
+            table: 'window-states',
+            predicate: '"window_id"=\'' + mainWindowId + '\''
+        }).then((wstate) => {
+            createWindow(wstate);
+        });
     });
 });

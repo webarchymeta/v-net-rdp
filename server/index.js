@@ -31,7 +31,6 @@ module.exports = {
             if (rdpClient) {
                 rdpClient.close();
             };
-            console.log(infos);
             let client = e.sender;
             rdpClient = rdp.createClient({
                 domain: infos.domain,
@@ -46,11 +45,19 @@ module.exports = {
             }).on('connect', () => {
                 client.send('rdp-connect');
             }).on('bitmap', (bitmap) => {
-                client.send('rdp-bitmap', bitmap);
+                try {
+                    client.send('rdp-bitmap', bitmap);
+                } catch (_err) {
+
+                }
             }).on('close', () => {
                 client.send('rdp-close');
             }).on('error', (err) => {
-                client.send('rdp-error', err);
+                try {
+                    client.send('rdp-error', err);
+                } catch (_err) {
+
+                }
             }).connect(infos.ip, infos.port);
         }).on('mouse', (e, x, y, button, isPressed) => {
             if (!rdpClient)
