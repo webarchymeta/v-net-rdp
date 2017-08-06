@@ -4,20 +4,25 @@
     "description": "1-NET Windows remote desktop client that can access remote machine through 1-NET gateways connecting two remote LANs.",
     "main": "index.js",
     "scripts": {
+        "start": "node_modules/.bin/electron main-entry.js",
+        "bootstrap": "node_modules/.bin/electron index.js",
+        "register": "node_modules/.bin/electron main-entry.js --register",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "keywords": [
         "remote",
         "desktop",
-        "remote",
         "control",
         "security",
         "internet"
     ],
-    "author": "Shuqian Ying",
+    "author": "Shuqian Ying, Sylvain Peyrefitte",
     "license": "GPL",
     "dependencies": {
+        "electron": "^1.6.1",
+        "multicast-dns": "git+https://github.com/webarchymeta/multicast-dns.git",
         "node-ipc": "^8.9.2",
-        "node-rdpjs": "git+https://github.com/webarchymeta/node-rdpjs"
+        "node-rdpjs": "git+https://github.com/webarchymeta/node-rdpjs.git",
+        "thunky": "^1.0.2"
     }
 }

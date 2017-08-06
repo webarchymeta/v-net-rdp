@@ -26,12 +26,12 @@ const
 
 module.exports = {
     start: (proxy) => {
-        var rdpClient = null;
+        let rdpClient = undefined;
         ipcMain.on('infos', (e, infos) => {
             if (rdpClient) {
                 rdpClient.close();
             };
-            let client = e.sender;
+            const client = e.sender;
             rdpClient = rdp.createClient({
                 domain: infos.domain,
                 userName: infos.username,

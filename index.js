@@ -1,30 +1,77 @@
-'use strict';
-
 const {
-    BrowserWindow,
     app,
-    ipcMain
-} = require('electron');
+    Menu,
+    MenuItem,
+    Tray
+} = require('electron'),
+    path = require('path'),
+    os = require('os'),
+    child_proc = require('child_process');
+
+const refresh_seconds = 10;
 
 const
-    crypto = require('crypto'),
-    inter_proc_ipc = require('node-ipc'),
-    server = require(__dirname + '/server'),
-    mainDbApi = require(__dirname + '/libs/main-db-api'),
-    winStateUpdator = require(__dirname + '/libs/state-updator');
+    booter = new(require(__dirname + '/libs/bootstrapper'))({
+        refresh_seconds: refresh_seconds
+    });
 
-const mainWindowId = 'main-window';
+let tray = null;
 
-let mainWindow = null;
-let mainDB, stateUpdator;
+const shouldQuit = app.makeSingleInstance((argv, wkdir) => {
+    if (tray) {
 
-const get_app_id = () => {
-    let md5 = crypto.createHash('md5');
-    md5.update(__filename.toLowerCase());
-    return md5.digest('hex');
+    }
+});
+
+if (shouldQuit) {
+    app.quit();
+    return;
+}
+
+const launcher = function(m, w, e) {
+    const gw = this;
+    if (gw.started)
+        return;
+    let socks5_address = gw.answers[0].targets[0];
+    const child_opts = {
+        cwd: process.cwd(),
+        detached: false,
+        shell: false,
+        env: {
+            CONTEXT_TITLE: gw.name,
+            SOCKS5_ADDRESS: socks5_address,
+            SOCKS5_PORT: gw.answers[0].port
+        }
+    };
+    const keys = Object.keys(process.env);
+    keys.forEach(k => {
+        child_opts.env[k] = process.env[k];
+    });
+    gw.proc = child_proc.spawn(path.join(process.cwd(), 'node_modules/.bin/electron' + (os.platform() === 'win32' ? '.cmd' : '')), ['main-entry.js'], child_opts);
+    gw.proc.on('error', err => {
+        console.log(err);
+    });
+    gw.proc.on('exit', function(code, sig) {
+        this.started = false;
+        this.proc = undefined;
+        console.log(`process exited with code ${code}, sig: ${sig}`);
+    }.bind(gw));
+    if (gw.proc.stdout) {
+        gw.proc.stdout.on('data', (data) => {
+            console.log(`local-app: ${data}`);
+        });
+        gw.proc.stderr.on('data', (data) => {
+            console.error(`local-app: ${data}`);
+        });
+    }
+    gw.started = true;
 };
 
+let gateway_ports = [];
+let last_update = undefined;
+
 app.on('window-all-closed', () => {
+    app_register.close();
     stateUpdator.flush().then(() => {
         return mainDB.close().then(() => {
             if (process.platform != 'darwin') {
@@ -32,116 +79,94 @@ app.on('window-all-closed', () => {
             }
         });
     });
-    inter_proc_ipc.of.inter_app_services.emit('socks-client-status', {
-        id: get_app_id(),
-        pid: process.pid,
-        started: false
-    });
 });
 
-const register_app = () => {
-    inter_proc_ipc.config.id = 'socks_app_register';
-    inter_proc_ipc.config.retry = 1500;
-    inter_proc_ipc.connectTo('inter_app_services', () => {
-        inter_proc_ipc.of.inter_app_services.on('connect', () => {
-            inter_proc_ipc.log('## connected to inter_app_services ##'.rainbow, inter_proc_ipc.config.delay);
-            let data = {
-                id: get_app_id(),
-                categ: 'socks',
-                type: 'remote-desktop',
-                runtime: 'electron',
-                name: app.getName(),
-                appPath: __dirname,
-                pid: process.pid,
-                started: true,
-            };
-            inter_proc_ipc.of.inter_app_services.emit('socks-client-register', data);
+const updator = () => {
+    return booter.update_ports().then(r => {
+        const old_ports = gateway_ports.map(p => p);
+        gateway_ports = [];
+        last_update = (new Date()).getTime();
+        r.ports.forEach(gwp => {
+            const old = old_ports.find(p => p.name === gwp.name);
+            if (old) {
+                gwp.proc = old.proc;
+                gwp.started = old.started;
+            }
+            gateway_ports.push(gwp);
         });
-        inter_proc_ipc.of.inter_app_services.on('disconnect', () => {
-            inter_proc_ipc.log('disconnected from socks_app_register'.notice);
-        });
-        inter_proc_ipc.of.inter_app_services.on('socks-client-register-ack', (data) => {
-            inter_proc_ipc.log('got a message from socks_app_register : '.debug, data);
-        });
-    });
-};
-
-const createWindow = (initBounds) => {
-    const wopts = {
-        width: initBounds ? initBounds.width : 1530,
-        height: initBounds ? initBounds.height : 920,
-        autoHideMenuBar: true,
-    };
-    if (initBounds) {
-        wopts.x = initBounds.loc_x;
-        wopts.y = initBounds.loc_y;
-    }
-    mainWindow = new BrowserWindow(wopts);
-    console.log('window created ...');
-    //mainWindow.openDevTools();
-    mainWindow.loadURL('file://' + require('path').join(__dirname, 'client/html/index.html'));
-
-    mainWindow.on('maximize', () => {
-        mainWindow.webContents.send('maximize');
-    });
-    mainWindow.on('unmaximize', () => {
-        mainWindow.webContents.send('unmaximize');
-    });
-
-    mainWindow.webContents.on('did-finish-load', () => {
-        mainWindow.maximize();
-        let copts = {
-            has_context: !!process.env.SOCKS5_ADDRESS
-        };
-        if (copts.has_context) {
-            copts.context_title = process.env.CONTEXT_TITLE;
-            copts.start_url = process.env.START_URL;
-            copts.socks5_address = process.env.SOCKS5_ADDRESS;
-            copts.socks5_port = process.env.SOCKS5_PORT;
+        if (r.more) {
+            r.more.on('more', function(gwp) {
+                const old = this.find(p => p.name === gwp.name);
+                if (old) {
+                    gwp.proc = old.proc;
+                    gwp.started = old.started;
+                }
+                gateway_ports.push(gwp);
+            }.bind(old_ports));
         }
-        mainWindow.webContents.send('runtime-context-update', copts);
-    });
-
-    mainWindow.on('resize', () => {
-        stateUpdator.updateWindowState(mainWindowId, {
-            bounds: mainWindow.getBounds()
-        })
-    });
-    mainWindow.on('move', () => {
-        stateUpdator.updateWindowState(mainWindowId, {
-            bounds: mainWindow.getBounds()
-        })
-    });
-
-    mainWindow.on('enter-full-screen', () => {
-
-    });
-    mainWindow.on('leave-full-screen', () => {
-
-    });
-
-    mainWindow.on('closed', () => {
-        mainWindow = null
+        setTimeout(function() {
+            if (this.more) {
+                this.more.removeAllListeners('more');
+                this.more = undefined;
+            }
+            booter.close();
+        }.bind(r), 10000);
     });
 };
 
 app.on('ready', () => {
-    register_app();
-    server.start(process.env.SOCKS5_ADDRESS ? {
-        socksHost: process.env.SOCKS5_ADDRESS,
-        socksPort: process.env.SOCKS5_PORT
-    } : undefined);
-    mainDB = new mainDbApi({
-        home: app.getPath('appData'),
-        path: app.getName() + '/databases'
-    });
-    mainDB.open().then(() => {
-        stateUpdator = new winStateUpdator(mainDB);
-        mainDB.find({
-            table: 'window-states',
-            predicate: '"window_id"=\'' + mainWindowId + '\''
-        }).then((wstate) => {
-            createWindow(wstate);
+    booter.update_ports().then(r => {
+        last_update = (new Date()).getTime();
+        const getMenu = (gw_lst) => {
+            const contextMenu = new Menu();
+            gw_lst.sort((a, b) => a.name > b.name ? 1 : -1).forEach(gw => {
+                contextMenu.append(new MenuItem({
+                    icon: 'client/img/green-dot.png',
+                    label: gw.name,
+                    sublabel: gw.descr || ' ... ',
+                    click: launcher.bind(gw)
+                }));
+            });
+            contextMenu.append(new MenuItem({
+                type: 'separator'
+            }));
+            contextMenu.append(new MenuItem({
+                label: 'Exit',
+                click: (m, w, e) => {
+                    app.quit();
+                }
+            }));
+            return contextMenu;
+        };
+        r.ports.forEach(gwp => {
+            gateway_ports.push(gwp);
         });
+        r.more.on('more', (gwp) => {
+            gateway_ports.push(gwp);
+        });
+        tray = new Tray('client/img/main-icon.png');
+        tray.on('click', (e, b) => {
+            const now = (new Date()).getTime();
+            if (now - last_update > refresh_seconds * 1000) {
+                updator().then(() => {
+                    tray.setContextMenu(getMenu(gateway_ports));
+                    tray.popUpContextMenu();
+                });
+            } else {
+                tray.setContextMenu(getMenu(gateway_ports));
+                tray.popUpContextMenu();
+            }
+        });
+        tray.on('right-click', (e) => {
+            e.preventDefault();
+        });
+        tray.setToolTip('1-NET Trans-LAN Remote Desktop');
+        setTimeout(function() {
+            if (this.more) {
+                this.more.removeAllListeners('more');
+                this.more = undefined;
+            }
+            booter.close();
+        }.bind(r), 10000);
     });
 });
