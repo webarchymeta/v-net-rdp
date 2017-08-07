@@ -29,7 +29,7 @@ const register_app = (app) => {
                 categ: 'socks',
                 type: process.env.APP_TYPE || 'browser',
                 runtime: path.sep + 'node_modules' + path.sep + '.bin' + path.sep + 'electron' + (os.platform() === 'win32' ? '.cmd' : ''),
-                name: app.getName(),
+                name: '1-net-rdp',
                 appPath: path.join(__dirname, '../'),
                 pid: process.pid,
                 single_instance: false,
