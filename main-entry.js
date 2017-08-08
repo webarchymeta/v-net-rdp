@@ -9,6 +9,7 @@ const {
 const
     path = require('path'),
     os = require('os'),
+    dns_client = require(__dirname + '/libs/dns-client'),
     app_register = require(__dirname + '/libs/app-register'),
     server = require(__dirname + '/server'),
     mainDbApi = require(__dirname + '/libs/main-db-api'),
@@ -28,6 +29,21 @@ app.on('window-all-closed', () => {
         });
     });
     app_register.close();
+});
+
+ipcMain.on('mdns-query', (e, q) => {
+    const dns = new dns_client();
+    dns.find(q.hostname, 'SRV').then(resp => {
+        e.sender.send('mdns-query-ack', {
+            ok: true,
+            response: resp
+        });
+    }).catch(err => {
+        e.sender.send('mdns-query-ack', {
+            ok: false,
+            error: err
+        });
+    });
 });
 
 const createWindow = (initBounds) => {
