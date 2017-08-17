@@ -90,6 +90,22 @@
         this.ctx = canvas.getContext("2d");
     }
 
+    let last_update = undefined;
+    let last_frame = undefined;
+    let buffer = undefined;
+    let bctx = undefined;
+    let nframes = 0;
+
+    setInterval(function() {
+        const now = (new Date()).getTime();
+        if (now - last_frame > 200 && buffer) {
+            this.ctx.drawImage(buffer, 0, 0);
+            buffer = undefined;
+            bctx = undefined;
+            last_update = undefined;
+        }
+    }, 100);
+
     Canvas.prototype = {
         /**
          * update canvas with new bitmap
@@ -102,11 +118,33 @@
             } else {
                 output = reverse(bitmap);
             }
-
             // use image data to use asm.js
+            /*
             var imageData = this.ctx.createImageData(output.width, output.height);
             imageData.data.set(output.data);
-            this.ctx.putImageData(imageData, bitmap.destLeft, bitmap.destTop);
+			this.ctx.putImageData(imageData, bitmap.destLeft, bitmap.destTop);
+			*/
+            const now = (new Date()).getTime();
+            if (!last_update || now - last_update > 100 || nframes > 10) {
+                if (buffer) {
+                    this.ctx.drawImage(buffer, 0, 0);
+                }
+                buffer = document.createElement('canvas');
+                buffer.width = this.canvas.width;
+                buffer.height = this.canvas.height;
+                bctx = buffer.getContext('2d');
+                const img = bctx.createImageData(output.width, output.height);
+                img.data.set(output.data);
+                bctx.putImageData(img, bitmap.destLeft, bitmap.destTop);
+                last_update = now;
+                nframes = 1;
+            } else {
+                const img = bctx.createImageData(output.width, output.height);
+                img.data.set(output.data);
+                bctx.putImageData(img, bitmap.destLeft, bitmap.destTop);
+                nframes++;
+            }
+            last_frame = now;
         }
     }
 
