@@ -3756,6 +3756,11 @@ a.btn.disabled,fieldset[disabled] a.btn{
 	width:100%
 }
 
+.btn-inline-block{
+	display: inline-block;
+	width:100px;
+}
+
 .btn-block+.btn-block{
 	margin-top:5px
 }

@@ -107,10 +107,15 @@ const createWindow = (initBounds) => {
 app.on('ready', () => {
     if (app_register.regist(app)) {
         const start_up = opts => {
-            server.start(opts ? {
+            const startupOpts = opts ? {
                 socksHost: opts.socksAddress,
                 socksPort: opts.socksPort
-            } : undefined);
+            } : undefined;
+            if (opts && opts.socksUsername) {
+                startupOpts.socksUsername = opts.socksUsername;
+                startupOpts.socksPassword = opts.socksPassword;
+            }
+            server.start(startupOpts);
             mainDB = new mainDbApi({
                 home: app.getPath('appData'),
                 path: app.getName() + '/databases'
@@ -125,9 +130,33 @@ app.on('ready', () => {
                 });
             });
         };
-        start_up(process.env.SOCKS5_ADDRESS ? {
-            socksAddress: process.env.SOCKS5_ADDRESS,
-            socksPort: process.env.SOCKS5_PORT
-        } : undefined);
+        if (!process.env.SOCKS5_AUTH) {
+            start_up(process.env.SOCKS5_ADDRESS ? {
+                socksAddress: process.env.SOCKS5_ADDRESS,
+                socksPort: process.env.SOCKS5_PORT
+            } : undefined);
+        } else {
+            const uinfo = JSON.parse(Buffer.from(process.env.SOCKS5_AUTH, 'base64').toString('utf8'));
+            start_up({
+                socksAddress: process.env.SOCKS5_ADDRESS,
+                socksPort: process.env.SOCKS5_PORT,
+                socksUsername: uinfo.u,
+                socksPassword: uinfo.p
+            });
+            /*
+            process.stdin.resume();
+            process.stdin.setEncoding('utf8');
+            process.stdin.on('data', juinfo => {
+                const uinfo = JSON.parse(juinfo);
+                console.log(uinfo);
+                start_up({
+                    socksAddress: process.env.SOCKS5_ADDRESS,
+                    socksPort: process.env.SOCKS5_PORT,
+                    socksUsername: uinfo.u,
+                    socksPassword: uinfo.p
+                });
+            });
+            */
+        }
     }
 });

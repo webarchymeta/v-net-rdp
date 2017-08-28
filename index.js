@@ -1,8 +1,10 @@
 const {
     app,
+    BrowserWindow,
     Menu,
     MenuItem,
-    Tray
+    Tray,
+    ipcMain
 } = require('electron'),
     path = require('path'),
     os = require('os'),
@@ -28,10 +30,7 @@ if (shouldQuit) {
     return;
 }
 
-const launcher = function(m, w, e) {
-    const gw = this;
-    if (gw.started)
-        return;
+const launch_it = (gw) => {
     const child_opts = {
         cwd: process.cwd(),
         detached: false,
@@ -42,6 +41,13 @@ const launcher = function(m, w, e) {
         child_opts.env.CONTEXT_TITLE = gw.name;
         child_opts.env.SOCKS5_ADDRESS = gw.answers[0].targets[0];
         child_opts.env.SOCKS5_PORT = gw.answers[0].port;
+        if (gw.auth_required) {
+            //child_opts.env.SOCKS5_AUTH = 'true';
+            child_opts.env.SOCKS5_AUTH = Buffer.from(JSON.stringify({
+                u: gw.username,
+                p: gw.password
+            }), 'utf8').toString('base64');
+        }
     };
     const keys = Object.keys(process.env);
     keys.forEach(k => {
@@ -56,15 +62,55 @@ const launcher = function(m, w, e) {
         this.proc = undefined;
         console.log(`process exited with code ${code}, sig: ${sig}`);
     }.bind(gw));
+    if (gw.auth_required) {
+        /*
+        gw.proc.stdin.setEncoding('utf8');
+        gw.proc.stdin.write(JSON.stringify({
+            u: gw.username,
+            p: gw.password
+        }));
+        gw.proc.stdin.end();
+        */
+    }
     if (gw.proc.stdout) {
         gw.proc.stdout.on('data', (data) => {
-            console.log(`local-app: ${data}`);
+            console.log(`local-out: ${data}`);
         });
         gw.proc.stderr.on('data', (data) => {
-            console.error(`local-app: ${data}`);
+            console.error(`local-error: ${data}`);
         });
     }
     gw.started = true;
+};
+
+const launcher = function(m, w, e) {
+    const gw = this;
+    if (gw.started)
+        return;
+    const now = (new Date()).getTime();
+    if (!gw.auth_required || gw.last_credential_load && (now - gw.last_credential_load) < 60 * 1000) {
+        launch_it(gw);
+    } else {
+        const wopts = {
+            title: 'User Credential',
+            width: 700,
+            height: 250,
+            frame: false,
+            show: false,
+            transparent: true
+        };
+        const login = new BrowserWindow(wopts);
+        ipcMain.once('user-credential', (e, msg) => {
+            if (msg.ok) {
+                gw.username = msg.username;
+                gw.password = msg.password;
+                gw.last_credential_load = (new Date()).getTime();
+                launch_it(gw);
+            }
+        });
+        login.loadURL('file://' + require('path').join(__dirname, 'client/html/login.html'));
+        login.show();
+    }
 };
 
 let gateway_ports = [];
@@ -134,7 +180,7 @@ app.on('ready', () => {
             }));
             gw_lst.sort((a, b) => a.name > b.name ? 1 : -1).filter(gw => gw.serving).forEach(gw => {
                 contextMenu.append(new MenuItem({
-                    icon: 'client/img/green-dot.png',
+                    icon: gw.auth_required ? 'client/img/green-locked-dot.png' : 'client/img/green-dot.png',
                     label: gw.name,
                     sublabel: gw.descr || ' ... ',
                     click: launcher.bind(gw)
