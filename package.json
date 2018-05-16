@@ -19,7 +19,7 @@
     "author": "Shuqian Ying, Sylvain Peyrefitte",
     "license": "GPL",
     "dependencies": {
-        "electron": "^1.6.1",
+        "electron": "^2.0.0",
         "multicast-dns": "git+https://github.com/webarchymeta/multicast-dns.git",
         "node-ipc": "^8.9.2",
         "node-rdpjs": "git+https://github.com/webarchymeta/node-rdpjs.git",
