@@ -20,17 +20,6 @@ const mainWindowId = 'main-window';
 let mainWindow = null;
 let mainDB, stateUpdator;
 
-app.on('window-all-closed', () => {
-    stateUpdator.flush().then(() => {
-        return mainDB.close().then(() => {
-            if (process.platform != 'darwin') {
-                app.quit();
-            }
-        });
-    });
-    app_register.close();
-});
-
 ipcMain.on('mdns-query', (e, q) => {
     const dns = new dns_client();
     dns.find(q.hostname, 'SRV').then(resp => {
@@ -46,11 +35,12 @@ ipcMain.on('mdns-query', (e, q) => {
     });
 });
 
-const createWindow = (initBounds) => {
+const createWindow = initBounds => {
     const wopts = {
         width: initBounds ? initBounds.width : 1530,
         height: initBounds ? initBounds.height : 920,
         autoHideMenuBar: true,
+        icon: __dirname + '/client/img/v-net-rdp.png'
     };
     if (initBounds) {
         wopts.x = initBounds.loc_x;
@@ -104,59 +94,70 @@ const createWindow = (initBounds) => {
     });
 };
 
-app.on('ready', () => {
-    if (app_register.regist(app)) {
-        const start_up = opts => {
-            const startupOpts = opts ? {
-                socksHost: opts.socksAddress,
-                socksPort: opts.socksPort
-            } : undefined;
-            if (opts && opts.socksUsername) {
-                startupOpts.socksUsername = opts.socksUsername;
-                startupOpts.socksPassword = opts.socksPassword;
-            }
-            server.start(startupOpts);
-            mainDB = new mainDbApi({
-                home: app.getPath('appData'),
-                path: app.getName() + '/databases'
-            });
-            mainDB.open().then(() => {
-                stateUpdator = new winStateUpdator(mainDB);
-                mainDB.find({
-                    table: 'window-states',
-                    predicate: '"window_id"=\'' + mainWindowId + '\''
-                }).then((wstate) => {
-                    createWindow(wstate);
-                });
-            });
-        };
-        if (!process.env.SOCKS5_AUTH) {
-            start_up(process.env.SOCKS5_ADDRESS ? {
-                socksAddress: process.env.SOCKS5_ADDRESS,
-                socksPort: process.env.SOCKS5_PORT
-            } : undefined);
-        } else {
-            const uinfo = JSON.parse(Buffer.from(process.env.SOCKS5_AUTH, 'base64').toString('utf8'));
-            start_up({
-                socksAddress: process.env.SOCKS5_ADDRESS,
-                socksPort: process.env.SOCKS5_PORT,
-                socksUsername: uinfo.u,
-                socksPassword: uinfo.p
-            });
-            /*
-            process.stdin.resume();
-            process.stdin.setEncoding('utf8');
-            process.stdin.on('data', juinfo => {
-                const uinfo = JSON.parse(juinfo);
-                console.log(uinfo);
-                start_up({
-                    socksAddress: process.env.SOCKS5_ADDRESS,
-                    socksPort: process.env.SOCKS5_PORT,
-                    socksUsername: uinfo.u,
-                    socksPassword: uinfo.p
-                });
-            });
-            */
+const run = () => {
+    const start_up = opts => {
+        const startupOpts = opts ? {
+            socksHost: opts.socksAddress,
+            socksPort: opts.socksPort
+        } : undefined;
+        if (opts && opts.socksUsername) {
+            startupOpts.socksUsername = opts.socksUsername;
+            startupOpts.socksPassword = opts.socksPassword;
         }
+        server.start(startupOpts);
+        mainDB = new mainDbApi({
+            home: app.getPath('appData'),
+            path: app.getName() + '/databases'
+        });
+        mainDB.open().then(() => {
+            stateUpdator = new winStateUpdator(mainDB);
+            mainDB.find({
+                table: 'window-states',
+                predicate: '"window_id"=\'' + mainWindowId + '\''
+            }).then((wstate) => {
+                createWindow(wstate);
+            });
+        });
+    };
+    if (!process.env.SOCKS5_AUTH) {
+        start_up(process.env.SOCKS5_ADDRESS ? {
+            socksAddress: process.env.SOCKS5_ADDRESS,
+            socksPort: process.env.SOCKS5_PORT
+        } : undefined);
+    } else {
+        const uinfo = JSON.parse(Buffer.from(process.env.SOCKS5_AUTH, 'base64').toString('utf8'));
+        start_up({
+            socksAddress: process.env.SOCKS5_ADDRESS,
+            socksPort: process.env.SOCKS5_PORT,
+            socksUsername: uinfo.u,
+            socksPassword: uinfo.p
+        });
     }
-});
+};
+
+const windowAllClosed = () => {
+    stateUpdator.flush().then(() => {
+        return mainDB.close().then(() => {
+            if (process.platform != 'darwin') {
+                app.quit();
+            }
+        });
+    });
+    if (!process.env.PRODUCTION_MODE) {
+        app_register.close();
+    }
+};
+
+if (!process.env.PRODUCTION_MODE) {
+    app.on('window-all-closed', windowAllClosed);
+    app.on('ready', () => {
+        if (app_register.regist(app)) {
+            run();
+        }
+    });
+} else {
+    module.exports = {
+        startup: run,
+        teardown: windowAllClosed
+    };
+}

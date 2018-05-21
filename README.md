@@ -6,6 +6,10 @@ A trans- local area network windows (trans-LAN) remote desktop client for V-NET,
 
 It is hard and expensive to do secured remote desktop access to Windows machines across LAN. V-NET provide a viable solution to the problem.
 
+**Prerequisites**
+
+* Install latest LTS version of `nodejs`.
+
 **Install instructions**
 
 To run this code, follow these steps:
@@ -23,10 +27,10 @@ The last command will start a tray icon on user's desktop. When clicked, a list 
 npm start
 ```
 
-Starts the browser in normal mode, without going through a the V-NET gateway tunnel.
+Starts the remote desktop client in normal mode, without going through a the V-NET gateway tunnel.
 
 ```
 npm run register
 ```
 
-Registers the browser with a running V-NET desktop client, which can be used to launch the browser for a specific V-NET gateway tunnel (port) from within.
+Registers the remote desktop client with a running V-NET desktop client, which can be used to launch the remote desktop client for a specific V-NET gateway tunnel (port) from within.

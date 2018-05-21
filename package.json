@@ -1,6 +1,7 @@
 {
     "name": "v-net-rdp",
-    "version": "0.5.0",
+    "productName": "V-NET RDP Client",
+    "version": "0.5",
     "description": "V-NET Windows remote desktop client that can access remote machine through V-NET gateways connecting two remote LANs.",
     "main": "index.js",
     "scripts": {
@@ -19,10 +20,11 @@
     "author": "Shuqian Ying, Sylvain Peyrefitte",
     "license": "GPL",
     "dependencies": {
-        "electron": "^2.0.0",
         "multicast-dns": "git+https://github.com/webarchymeta/multicast-dns.git",
         "node-ipc": "^8.9.2",
-        "node-rdpjs": "git+https://github.com/webarchymeta/node-rdpjs.git",
-        "thunky": "^1.0.2"
+        "node-rdpjs": "git+https://github.com/webarchymeta/node-rdpjs.git"
+    },
+    "devDependencies": {
+        "electron": "^2.0.1"
     }
 }

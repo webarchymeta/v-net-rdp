@@ -111,7 +111,9 @@ const api = function(opts) {
             return dns.query(['*.gw-port.local'], 'SRV').then(r => {
                 r.results.forEach(p => {
                     if (p.answers.length > 0) {
-                        curr_list.push(new gateway_port(p));
+                        if (!curr_list.find(x => x.name === p.name)) {
+                            curr_list.push(new gateway_port(p));
+                        }
                     }
                 });
                 return r.more;
@@ -140,11 +142,13 @@ const api = function(opts) {
                 };
                 more.on('more', p => {
                     if (p.answers.length > 0) {
-                        curr_list.push(new gateway_port(p));
-                        dns.query([p.name], 'TXT').then(add_descr).then(() => {
-                            const gw = new gateway_port(p);
-                            evtSink.emit('more', gw);
-                        });
+                        if (!curr_list.find(x => x.name === p.name)) {
+                            curr_list.push(new gateway_port(p));
+                            dns.query([p.name], 'TXT').then(add_descr).then(() => {
+                                const gw = new gateway_port(p);
+                                evtSink.emit('more', gw);
+                            });
+                        }
                     }
                 });
                 const rec = {
@@ -158,7 +162,6 @@ const api = function(opts) {
                 wait_list = [];
                 last_update = now.getTime();
                 return rec;
-                //return dns.query(curr_list.map(p => p.name), 'TXT').then(add_descr);
             });
         }
     };
