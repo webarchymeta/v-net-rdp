@@ -7,8 +7,6 @@ const {
 } = require('electron');
 
 const
-    path = require('path'),
-    os = require('os'),
     dns_client = require(__dirname + '/libs/dns-client'),
     app_register = require(__dirname + '/libs/app-register'),
     server = require(__dirname + '/server'),
@@ -40,16 +38,19 @@ const createWindow = initBounds => {
         width: initBounds ? initBounds.width : 1530,
         height: initBounds ? initBounds.height : 920,
         autoHideMenuBar: true,
-        icon: __dirname + '/client/img/v-net-rdp.png'
+        icon: __dirname + '/client/img/v-net-rdp.png',
+        webPreferences: {
+            nodeIntegrationInWorker: true,
+            nodeIntegration: true
+        }
     };
     if (initBounds) {
         wopts.x = initBounds.loc_x;
         wopts.y = initBounds.loc_y;
     }
     mainWindow = new BrowserWindow(wopts);
-    //mainWindow.openDevTools();
+    //mainWindow.webContents.openDevTools();
     mainWindow.loadURL('file://' + require('path').join(__dirname, 'client/html/index.html'));
-
     mainWindow.on('maximize', () => {
         mainWindow.webContents.send('maximize');
     });

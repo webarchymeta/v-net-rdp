@@ -1,3 +1,8 @@
+/**
+   Windows starts to block it, currently not functional
+   see: https://github.com/citronneur/node-rdpjs/issues/32
+ */
+
 const {
     app,
     BrowserWindow,
@@ -30,15 +35,19 @@ let tray = null;
 let mainEntry = undefined;
 
 if (!process.env.PRODUCTION_MODE) {
-    const shouldQuit = app.makeSingleInstance((argv, wkdir) => {
-        if (tray) {
+    const gotTheLock = app.requestSingleInstanceLock();
 
-        }
-    });
-
-    if (shouldQuit) {
+    if (!gotTheLock) {
         app.quit();
         return;
+    } else {
+        app.on('second-instance', (cmdl, wkdir) => {
+            if (mainWindow) {
+                if (mainWindow.isMinimized())
+                    mainWindow.restore();
+                mainWindow.focus();
+            }
+        });
     }
 }
 
@@ -70,7 +79,7 @@ const launch_it = gw => {
     } else {
         child_opts.env.PRODUCTION_MODE = true;
         if (!config.packaged) {
-            gw.proc = child_proc.spawn(path.join(process.cwd(), 'node_modules/electron/dist/electron' + (os.platform() === 'win32' ? '.exe' : '')), ['index.js'], child_opts);
+            gw.proc = child_proc.spawn(path.join(process.cwd(), 'node_modules/electron/dist/electron' + (os.platform() === 'win32' ? '.exe' : '')), [ /*'--inspect'*/ , 'index.js'], child_opts);
         } else {
             gw.proc = child_proc.spawn(path.join(process.cwd(), config.package_name + (os.platform() === 'win32' ? '.exe' : '')), [], child_opts);
         }
@@ -121,6 +130,7 @@ const launcher = function(m, w, e) {
             transparent: true
         };
         const login = new BrowserWindow(wopts);
+        //login.webContents.openDevTools();
         ipcMain.once('user-credential', (e, msg) => {
             if (msg.ok) {
                 gw.username = msg.username;
