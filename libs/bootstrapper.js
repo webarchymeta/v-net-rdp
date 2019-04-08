@@ -40,22 +40,33 @@ const gateway_port = function(data) {
                     port: a.port
                 });
                 self.serving = self.answers[0].targets[0] !== 'stopped';
-            } else if (a instanceof Uint8Array) {
-                const str = Buffer.from(a).toString('utf8');
-                try {
-                    const rec = JSON.parse(str);
-                    self.auth_required = rec.auth;
-                    self.descr = rec.descr;
-                } catch (ex) {
-                    self.descr = str;
-                }
-            } else if (a instanceof String) {
-                try {
-                    const rec = JSON.parse(a);
-                    self.auth_required = rec.auth;
-                    self.descr = rec.descr;
-                } catch (ex) {
-                    self.descr = a;
+            } else {
+                if (a instanceof Uint8Array) {
+                    const str = Buffer.from(a).toString('utf8');
+                    try {
+                        const rec = JSON.parse(str);
+                        self.auth_required = rec.auth;
+                        self.descr = rec.descr;
+                    } catch (ex) {
+                        self.descr = str;
+                    }
+                } else if (a instanceof String) {
+                    try {
+                        const rec = JSON.parse(a);
+                        self.auth_required = rec.auth;
+                        self.descr = rec.descr;
+                    } catch (ex) {
+                        self.descr = a;
+                    }
+                } else {
+                    const str = a.toString('utf8');
+                    try {
+                        const rec = JSON.parse(str);
+                        self.auth_required = rec.auth;
+                        self.descr = rec.descr;
+                    } catch (ex) {
+                        self.descr = str;
+                    }
                 }
             }
         } else {
